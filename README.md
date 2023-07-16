@@ -1,0 +1,1 @@
+log collector project with kafka, etcd and es.
