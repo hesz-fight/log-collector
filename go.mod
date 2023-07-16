@@ -3,6 +3,7 @@ module log-collector
 go 1.20
 
 require (
+	github.com/hpcloud/tail v1.0.0
 	github.com/shopify/sarama v1.19.0
 	github.com/spf13/viper v1.16.0
 )
@@ -29,6 +30,8 @@ require (
 	github.com/subosito/gotenv v1.4.2 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
+	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

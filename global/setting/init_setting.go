@@ -1,7 +1,7 @@
 package setting
 
 import (
-	"log-collector/global/apierror"
+	"log-collector/global/errcode"
 
 	"github.com/spf13/viper"
 )
@@ -25,7 +25,7 @@ func IntSetting() error {
 	}
 
 	if err := vp.UnmarshalKey(kafkaConfigKey, KafkaSettingObj); err != nil {
-		return apierror.InitLogConfigError.ToError()
+		return errcode.InitLogConfigError.ToError()
 	}
 
 	return nil

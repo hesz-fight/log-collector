@@ -1,4 +1,4 @@
-package apierror
+package errcode
 
 import (
 	"errors"
