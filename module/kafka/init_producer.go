@@ -1,4 +1,4 @@
-package logagent
+package kafka
 
 import (
 	"log-collector/global/errcode"
@@ -14,7 +14,7 @@ func InitProducer() error {
 	var err error
 	Producer, err = NewSyncProducer(addrs, topic, nil)
 	if err != nil {
-		return errcode.InitKafkaError.ToError()
+		return errcode.InitKafkaError.WithDetail(err.Error()).ToError()
 	}
 
 	return nil

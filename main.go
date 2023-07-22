@@ -2,28 +2,22 @@ package main
 
 import (
 	"log-collector/global/setting"
+	"log-collector/module/kafka"
 	"log-collector/module/logagent"
-	"log-collector/module/logreader"
+	"log-collector/module/logtail"
 )
 
-func start() {
-	defer func() {
-		if err := recover(); err != nil {
-		}
-	}()
-
-}
-
 func main() {
+	// init
 	if err := setting.IntSetting(); err != nil {
 		panic(err)
 	}
-	if err := logagent.InitProducer(); err != nil {
+	if err := kafka.InitProducer(); err != nil {
 		panic(err)
 	}
-	if err := logreader.InitLogReader(); err != nil {
+	if err := logtail.InitLogReader(); err != nil {
 		panic(err)
 	}
 
-	start()
+	logagent.StartReadLog()
 }

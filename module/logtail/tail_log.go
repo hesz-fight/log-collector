@@ -1,4 +1,4 @@
-package logreader
+package logtail
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"log-collector/global/errcode"
+	"log-collector/global/setting"
 	"log-collector/model/common"
 
 	"github.com/hpcloud/tail"
@@ -24,8 +25,8 @@ type TailReader struct {
 }
 
 func InitLogReader() error {
-	filename := "log/tail.log"
-	bufSize := 1024
+	filename := setting.TailSettingCache.FilePath
+	bufSize := setting.TailSettingCache.MaxBufSize
 	config := tail.Config{
 		ReOpen:    true,
 		Follow:    true,
