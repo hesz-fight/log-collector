@@ -6,6 +6,14 @@ import (
 	"log-collector/module/logreader"
 )
 
+func start() {
+	defer func() {
+		if err := recover(); err != nil {
+		}
+	}()
+
+}
+
 func main() {
 	if err := setting.IntSetting(); err != nil {
 		panic(err)
@@ -16,4 +24,6 @@ func main() {
 	if err := logreader.InitLogReader(); err != nil {
 		panic(err)
 	}
+
+	start()
 }

@@ -11,7 +11,7 @@ const (
 )
 
 var (
-	KafkaSettingObj *KafkaSetting
+	KafkaSettingCache *KafkaSetting
 )
 
 func IntSetting() error {
@@ -24,7 +24,7 @@ func IntSetting() error {
 		return err
 	}
 
-	if err := vp.UnmarshalKey(kafkaConfigKey, KafkaSettingObj); err != nil {
+	if err := vp.UnmarshalKey(kafkaConfigKey, KafkaSettingCache); err != nil {
 		return errcode.InitLogConfigError.ToError()
 	}
 

@@ -8,8 +8,8 @@ import (
 var Producer *KafkaSyncProducer
 
 func InitProducer() error {
-	addrs := setting.KafkaSettingObj.Addrs
-	topic := setting.KafkaSettingObj.Topic
+	addrs := setting.KafkaSettingCache.Addrs
+	topic := setting.KafkaSettingCache.Topic
 
 	var err error
 	Producer, err = NewSyncProducer(addrs, topic, nil)
