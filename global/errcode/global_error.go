@@ -1,7 +1,7 @@
 package errcode
 
 const (
-	defaultErrorNo = 10000
+	defaultErrorNo = 9999
 )
 
 var (
@@ -10,6 +10,7 @@ var (
 	InitLogUtilError       = NewWrapError(10002, "init log util error")
 	InitLogConfigError     = NewWrapError(10003, "init config error")
 	InitLogTailReaderError = NewWrapError(10004, "init tail reader error")
+	InitLogEtcdrError      = NewWrapError(10005, "init etcd reader error")
 	// read error in [20000, 29999]
 
 )

@@ -8,12 +8,14 @@ import (
 
 const (
 	kafkaConfigKey = "Kafka"
-	tailConfKet    = "Tail"
+	tailConfKey    = "Tail"
+	etcdConfKey    = "Etcd"
 )
 
 var (
 	KafkaSettingCache *KafkaSetting
 	TailSettingCache  *TailSetting
+	EtcdSettingCache  *EtcdSetting
 )
 
 func IntSetting() error {
@@ -29,7 +31,10 @@ func IntSetting() error {
 	if err := vp.UnmarshalKey(kafkaConfigKey, &KafkaSettingCache); err != nil {
 		return errcode.InitLogConfigError.WithDetail(err.Error()).ToError()
 	}
-	if err := vp.UnmarshalKey(tailConfKet, &TailSettingCache); err != nil {
+	if err := vp.UnmarshalKey(tailConfKey, &TailSettingCache); err != nil {
+		return errcode.InitLogConfigError.WithDetail(err.Error()).ToError()
+	}
+	if err := vp.UnmarshalKey(etcdConfKey, &EtcdSettingCache); err != nil {
 		return errcode.InitLogConfigError.WithDetail(err.Error()).ToError()
 	}
 

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"log-collector/global/errcode"
-	"log-collector/global/setting"
 	"log-collector/model/common"
 
 	"github.com/hpcloud/tail"
@@ -24,9 +23,7 @@ type TailReader struct {
 	done chan common.Empty
 }
 
-func InitLogReader() error {
-	filename := setting.TailSettingCache.FilePath
-	bufSize := setting.TailSettingCache.MaxBufSize
+func InitLogReader(filename string, bufSize int) error {
 	config := tail.Config{
 		ReOpen:    true,
 		Follow:    true,

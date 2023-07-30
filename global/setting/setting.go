@@ -9,3 +9,8 @@ type TailSetting struct {
 	FilePath   string
 	MaxBufSize int
 }
+
+type EtcdSetting struct {
+	Endpoints   []string
+	DialTimeout int64
+}

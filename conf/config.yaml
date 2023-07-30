@@ -6,3 +6,8 @@ Kafka:
 Tail:
   FilePath: log/tail.log
   MaxBufSize: 1024
+
+Etcd:
+  Endpoints:
+    - 127.0.0.1:2379
+  DialTimeout: 10

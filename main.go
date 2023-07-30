@@ -2,9 +2,11 @@ package main
 
 import (
 	"log-collector/global/setting"
+	"log-collector/module/etcd"
 	"log-collector/module/kafka"
 	"log-collector/module/logagent"
 	"log-collector/module/logtail"
+	"time"
 )
 
 func main() {
@@ -12,12 +14,18 @@ func main() {
 	if err := setting.IntSetting(); err != nil {
 		panic(err)
 	}
-	if err := kafka.InitProducer(); err != nil {
+	if err := kafka.InitProducer(setting.KafkaSettingCache.Addrs,
+		setting.KafkaSettingCache.Topic); err != nil {
 		panic(err)
 	}
-	if err := logtail.InitLogReader(); err != nil {
+	if err := logtail.InitLogReader(setting.TailSettingCache.FilePath,
+		setting.TailSettingCache.MaxBufSize); err != nil {
 		panic(err)
 	}
-
+	if err := etcd.InitEtcd(setting.EtcdSettingCache.Endpoints,
+		time.Duration(setting.EtcdSettingCache.DialTimeout)*time.Second); err != nil {
+		panic(err)
+	}
+	// start reading log file
 	logagent.StartReadLog()
 }
