@@ -10,13 +10,12 @@ var Producer *KafkaSyncProducer
 
 type KafkaSyncProducer struct {
 	Producer sarama.SyncProducer
-	Topic    string
 	Config   *sarama.Config
 }
 
-func (p *KafkaSyncProducer) SendMessag(value string) (int32, int64, error) {
+func (p *KafkaSyncProducer) SendMessag(topic string, value string) (int32, int64, error) {
 	msg := &sarama.ProducerMessage{
-		Topic: p.Topic,
+		Topic: topic,
 		Value: sarama.StringEncoder(value),
 	}
 
@@ -27,9 +26,9 @@ func (p *KafkaSyncProducer) Close() error {
 	return p.Producer.Close()
 }
 
-func InitProducer(addrs []string, topic string) error {
+func InitProducer(addrs []string) error {
 	var err error
-	Producer, err = NewSyncProducer(addrs, topic, nil)
+	Producer, err = NewSyncProducer(addrs, nil)
 	if err != nil {
 		return errcode.InitKafkaError.WithDetail(err.Error()).ToError()
 	}
@@ -37,7 +36,7 @@ func InitProducer(addrs []string, topic string) error {
 	return nil
 }
 
-func NewSyncProducer(addrs []string, topic string, config *sarama.Config) (*KafkaSyncProducer, error) {
+func NewSyncProducer(addrs []string, config *sarama.Config) (*KafkaSyncProducer, error) {
 	if config == nil {
 		config = sarama.NewConfig()
 		// learder and followers must return ack
@@ -50,5 +49,5 @@ func NewSyncProducer(addrs []string, topic string, config *sarama.Config) (*Kafk
 		return nil, err
 	}
 
-	return &KafkaSyncProducer{Producer: producer, Topic: topic, Config: config}, nil
+	return &KafkaSyncProducer{Producer: producer, Config: config}, nil
 }

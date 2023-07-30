@@ -14,16 +14,19 @@ func main() {
 	if err := setting.IntSetting(); err != nil {
 		panic(err)
 	}
-	if err := kafka.InitProducer(setting.KafkaSettingCache.Addrs,
-		setting.KafkaSettingCache.Topic); err != nil {
+	if err := kafka.InitProducer(setting.KafkaSettingCache.Addrs); err != nil {
 		panic(err)
 	}
-	if err := logtail.InitLogReader(setting.TailSettingCache.FilePath,
-		setting.TailSettingCache.MaxBufSize); err != nil {
-		panic(err)
-	}
+
 	if err := etcd.InitEtcd(setting.EtcdSettingCache.Endpoints,
 		time.Duration(setting.EtcdSettingCache.DialTimeout)*time.Second); err != nil {
+		panic(err)
+	}
+
+	// obtain the file path and topic from etcd
+
+	if err := logtail.InitLogReader(setting.TailSettingCache.FilePath,
+		setting.TailSettingCache.MaxBufSize); err != nil {
 		panic(err)
 	}
 	// start reading log file

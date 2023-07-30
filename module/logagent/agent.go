@@ -27,7 +27,7 @@ func StartReadLog() {
 		}
 		// send log text to kafka
 		for i := 0; i < retryTime; i++ {
-			partition, offset, err := kafka.Producer.SendMessag(text)
+			partition, offset, err := kafka.Producer.SendMessag("", text)
 			if err != nil {
 				continue
 			}

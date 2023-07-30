@@ -8,26 +8,24 @@ import (
 	"go.etcd.io/etcd/clientv3"
 )
 
-var EtcdWrapperCli *EtcdWrapper
-
 type EtcdWrapper struct {
 	etcdCli *clientv3.Client
 }
 
-func InitEtcd(endpointds []string, dialTimeout time.Duration) error {
+func NewEtcdWrapper(endpointds []string, dialTimeout time.Duration) (*EtcdWrapper, error) {
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpointds,
 		DialTimeout: dialTimeout,
 	})
 	if err != nil {
-		return errcode.InitLogEtcdrError.WithDetail(err.Error()).ToError()
+		return nil, errcode.InitLogEtcdrError.WithDetail(err.Error()).ToError()
 	}
 
-	EtcdWrapperCli = &EtcdWrapper{
+	etcdWrapper := &EtcdWrapper{
 		etcdCli: cli,
 	}
 
-	return nil
+	return etcdWrapper, nil
 }
 
 // Watch watch the key
