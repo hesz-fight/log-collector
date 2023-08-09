@@ -7,6 +7,7 @@ import (
 	"log"
 	"log-collector/model/common"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/coreos/etcd/mvcc/mvccpb"
@@ -16,7 +17,10 @@ const (
 	maxSize = 1024
 )
 
-var defaultEtcdContent *EtcdContent
+var (
+	defaultEtcdContent *EtcdContent
+	once               sync.Once
+)
 
 // Observer ...
 type Observer interface {
@@ -33,7 +37,7 @@ type EtcdContent struct {
 	Wrapper   *EtcdWrapper
 }
 
-func (e *EtcdContent) Register(key string, observer Observer) error {
+func (e *EtcdContent) register(key string, observer Observer) error {
 	if e.Observers == nil {
 		e.Observers = make(map[string][]Observer)
 	}
@@ -49,8 +53,8 @@ func (e *EtcdContent) Register(key string, observer Observer) error {
 	return nil
 }
 
-// NotifyAll ...
-func (e *EtcdContent) NotifyAll(ctx context.Context, key string, conf []*ConfigEntry) {
+// notifyAll ...
+func (e *EtcdContent) notifyAll(ctx context.Context, key string, conf []*ConfigEntry) {
 	observers, ok := e.Observers[key]
 	if !ok {
 		return
@@ -97,7 +101,7 @@ func (e *EtcdContent) watchAndUpdate(ctx context.Context, key string) error {
 				return err
 			}
 			// notify
-			e.NotifyAll(ctx, key, conf)
+			e.notifyAll(ctx, key, conf)
 			log.Printf("watching value change key:%v val:%v\n", key, reflect.ValueOf(conf).Index(0).Elem().Interface())
 		}
 	}
@@ -105,27 +109,31 @@ func (e *EtcdContent) watchAndUpdate(ctx context.Context, key string) error {
 	return nil
 }
 
-// Register ...
-func Register(key string, observer Observer) error {
-	return defaultEtcdContent.Register(key, observer)
-}
-
 // InitEtcd ...
 func InitEtcd(endpointds []string, dialTimeout time.Duration) error {
-	etcdWrapper, err := NewEtcdWrapper(endpointds, dialTimeout)
-	if err != nil {
-		return err
-	}
+	var err error
+	once.Do(
+		func() {
+			etcdWrapper, e := NewEtcdWrapper(endpointds, dialTimeout)
+			if e != nil {
+				err = e
+				return
+			}
+			defaultEtcdContent = &EtcdContent{
+				Observers: make(map[string][]Observer),
+				Wrapper:   etcdWrapper,
+			}
+		})
 
-	defaultEtcdContent = &EtcdContent{
-		Observers: make(map[string][]Observer),
-		Wrapper:   etcdWrapper,
-	}
-
-	return nil
+	return err
 }
 
-// ReadAndWatch ...
+// Register ...
+func Register(key string, observer Observer) error {
+	return defaultEtcdContent.register(key, observer)
+}
+
+// ReadAndWatch read and watch the config
 func ReadAndWatch(ctx context.Context, configKey string) ([]*ConfigEntry, error) {
 	conf := make([]*ConfigEntry, 0)
 	if err := defaultEtcdContent.readAndUnmarshal(ctx, configKey, &conf); err != nil {

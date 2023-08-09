@@ -2,11 +2,15 @@ package kafka
 
 import (
 	"log-collector/global/errcode"
+	"sync"
 
 	"github.com/shopify/sarama"
 )
 
-var Producer *KafkaSyncProducer
+var (
+	Producer *KafkaSyncProducer
+	once     sync.Once
+)
 
 type KafkaSyncProducer struct {
 	Producer sarama.SyncProducer
@@ -28,12 +32,16 @@ func (p *KafkaSyncProducer) Close() error {
 
 func InitProducer(addrs []string) error {
 	var err error
-	Producer, err = NewSyncProducer(addrs, nil)
-	if err != nil {
-		return errcode.InitKafkaError.WithDetail(err.Error()).ToError()
-	}
+	once.Do(func() {
+		producer, e := NewSyncProducer(addrs, nil)
+		if e != nil {
+			err = errcode.InitKafkaError.WithDetail(e.Error()).ToError()
+			return
+		}
+		Producer = producer
+	})
 
-	return nil
+	return err
 }
 
 func NewSyncProducer(addrs []string, config *sarama.Config) (*KafkaSyncProducer, error) {
