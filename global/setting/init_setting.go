@@ -5,6 +5,7 @@ import (
 	"log-collector/global/globalconst"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/spf13/viper"
 )
@@ -15,6 +16,8 @@ const (
 	etcdConfKey    = "Etcd"
 )
 
+var once sync.Once
+
 var (
 	KafkaSettingCache *KafkaSetting
 	TailSettingCache  *TailSetting
@@ -22,26 +25,31 @@ var (
 )
 
 func InitSetting(layer int) error {
-	vp := viper.New()
-	vp.SetConfigName("config")
-	vp.AddConfigPath(getAbsPath(layer) + globalconst.PathSeparator + "conf")
-	vp.SetConfigType("yaml")
+	var err error
+	once.Do(func() {
+		vp := viper.New()
+		vp.SetConfigName("config")
+		vp.AddConfigPath(getAbsPath(layer) + globalconst.PathSeparator + "conf")
+		vp.SetConfigType("yaml")
+		if e := vp.ReadInConfig(); e != nil {
+			err = e
+			return
+		}
+		if e := vp.UnmarshalKey(kafkaConfigKey, &KafkaSettingCache); e != nil {
+			err = errcode.InitLogConfigError.WithDetail(e.Error()).ToError()
+			return
+		}
+		if e := vp.UnmarshalKey(tailConfKey, &TailSettingCache); e != nil {
+			err = errcode.InitLogConfigError.WithDetail(e.Error()).ToError()
+			return
+		}
+		if e := vp.UnmarshalKey(etcdConfKey, &EtcdSettingCache); e != nil {
+			err = errcode.InitLogConfigError.WithDetail(e.Error()).ToError()
+			return
+		}
+	})
 
-	if err := vp.ReadInConfig(); err != nil {
-		return err
-	}
-
-	if err := vp.UnmarshalKey(kafkaConfigKey, &KafkaSettingCache); err != nil {
-		return errcode.InitLogConfigError.WithDetail(err.Error()).ToError()
-	}
-	if err := vp.UnmarshalKey(tailConfKey, &TailSettingCache); err != nil {
-		return errcode.InitLogConfigError.WithDetail(err.Error()).ToError()
-	}
-	if err := vp.UnmarshalKey(etcdConfKey, &EtcdSettingCache); err != nil {
-		return errcode.InitLogConfigError.WithDetail(err.Error()).ToError()
-	}
-
-	return nil
+	return err
 }
 
 func getAbsPath(layer int) string {
