@@ -1,6 +1,7 @@
 package logtail
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -23,8 +24,8 @@ const (
 )
 
 type TailReaderManager struct {
-	TailReaders []*TailReader
-	Mut         sync.RWMutex
+	TailWorker []*TailReader
+	Mtx        sync.RWMutex
 }
 
 type TailReader struct {
@@ -37,48 +38,52 @@ type TailReader struct {
 	// log path
 	path string
 	// kafka topics
-	topic []string
+	topics []string
 }
 
-// InitTailReaders ...
-func InitTailReaders(configEntries []*etcd.ConfigEntry) (*TailReaderManager, error) {
-	config := tail.Config{
-		ReOpen:    true,
-		Follow:    true,
-		Location:  &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END},
-		MustExist: false,
-		Poll:      true,
-	}
-
+// InitAndStart ...
+func InitAndStart(ctx context.Context, configEntries []*etcd.ConfigEntry) (*TailReaderManager, error) {
 	readers := make([]*TailReader, 0, len(configEntries))
 	for _, entry := range configEntries {
-		tail, err := tail.TailFile(entry.Path, config)
+		tail, err := tail.TailFile(entry.Path, tail.Config{
+			ReOpen:    true,
+			Follow:    true,
+			Location:  &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END},
+			MustExist: false,
+			Poll:      true,
+		})
 		if err != nil {
 			return nil, errcode.InitLogTailReaderError.ToError()
 		}
 		readers = append(readers, &TailReader{
-			tail:  tail,
-			buf:   make(chan string, setting.TailSettingCache.MaxBufSize),
-			done:  make(chan common.Empty),
-			path:  entry.Path,
-			topic: strings.Split(entry.Topic, ","),
+			tail:   tail,
+			buf:    make(chan string, setting.TailSettingCache.MaxBufSize),
+			done:   make(chan common.Empty),
+			path:   entry.Path,
+			topics: strings.Split(entry.Topic, ","),
 		})
 	}
 
-	readerManager := &TailReaderManager{
-		TailReaders: readers,
-		Mut:         sync.RWMutex{},
+	mgr := &TailReaderManager{
+		TailWorker: readers,
+		Mtx:        sync.RWMutex{},
 	}
 
-	return readerManager, nil
+	mgr.startReadLog(ctx)
+
+	return mgr, nil
 }
 
-func (t *TailReaderManager) Notify(configEntries []*etcd.ConfigEntry, bufSize int) {
-	t.Mut.Lock()
-	defer t.Mut.RUnlock()
+func (t *TailReaderManager) Notify(ctx context.Context, conf common.Any) {
+	t.Mtx.Lock()
+	defer t.Mtx.RUnlock()
+	confEntryArr, ok := conf.([]*etcd.ConfigEntry)
+	if !ok {
+		return
+	}
 	// update and done
-	newReaders := make([]*TailReader, 0, len(configEntries))
-	for _, entry := range configEntries {
+	newReaders := make([]*TailReader, 0, len(confEntryArr))
+	for _, entry := range confEntryArr {
 		tail, err := tail.TailFile(entry.Path,
 			tail.Config{
 				ReOpen:    true,
@@ -92,50 +97,56 @@ func (t *TailReaderManager) Notify(configEntries []*etcd.ConfigEntry, bufSize in
 			return
 		}
 		newReaders = append(newReaders, &TailReader{
-			tail:  tail,
-			buf:   make(chan string, bufSize),
-			done:  make(chan common.Empty),
-			path:  entry.Path,
-			topic: strings.Split(entry.Topic, ","),
+			tail:   tail,
+			buf:    make(chan string, setting.TailSettingCache.MaxBufSize),
+			done:   make(chan common.Empty),
+			path:   entry.Path,
+			topics: strings.Split(entry.Topic, ","),
 		})
 	}
 
-	oldReaders := t.TailReaders
-	t.TailReaders = newReaders
-	t.StartReadLog()
+	oldReaders := t.TailWorker
+	t.TailWorker = newReaders
+
+	t.startReadLog(ctx)
 	for _, r := range oldReaders {
 		close(r.Done())
 	}
 }
 
-func (t *TailReaderManager) StartReadLog() {
+func (t *TailReaderManager) startReadLog(ctx context.Context) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("start panic")
+			log.Println("start panic")
 		}
 	}()
-
-	fmt.Println("start log agent")
+	log.Println("start log agent")
 	// parallel read
-	for _, reader := range t.TailReaders {
+	for _, reader := range t.TailWorker {
 		go func(r *TailReader) {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Println(string(debug.Stack()))
+				}
+			}()
 			r.Srart()
 			for {
 				text, ok := r.SyncRead()
 				if !ok {
-					continue
-				}
-				// send log text to kafka
-				for i := 0; i < retryTime; i++ {
-					partition, offset, err := kafka.Producer.SendMessag("", text)
-					if err != nil {
-						continue
-					}
-					fmt.Printf("send kafka successfully. partition:%v offset:%v\n", partition, offset)
 					break
 				}
+				// send log text to kafka
+				for _, topic := range r.topics {
+					for i := 0; i < retryTime; i++ {
+						partition, offset, err := kafka.Producer.SendMessag(topic, text)
+						if err != nil {
+							continue
+						}
+						fmt.Printf("send kafka successfully. partition:%v offset:%v\n", partition, offset)
+						break
+					}
+				}
 			}
-
 		}(reader)
 	}
 }
@@ -144,8 +155,10 @@ func (t *TailReader) Srart() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				fmt.Println(string(debug.Stack()))
+				log.Println(string(debug.Stack()))
 			}
+			// close the chan when exiting the func
+			close(t.buf)
 		}()
 
 		var line *tail.Line
@@ -168,7 +181,7 @@ func (t *TailReader) Srart() {
 				t.buf <- line.Text
 			}
 		}
-		fmt.Println("stop read by sigal")
+		log.Println("stop read by sigal")
 	}()
 }
 

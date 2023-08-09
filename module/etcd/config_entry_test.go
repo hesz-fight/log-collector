@@ -8,7 +8,7 @@ import (
 )
 
 func TestConfigEntry(t *testing.T) {
-	if err := setting.IntSetting(2); err != nil {
+	if err := setting.InitSetting(2); err != nil {
 		panic(err)
 	}
 	// init
@@ -27,10 +27,20 @@ func TestConfigEntry(t *testing.T) {
 		defaultEtcdContent.Wrapper.DeleteOne(context.Background(), key)
 	}()
 
-	entryArr, err := ReadAndWatch(key)
+	ctx := context.Background()
+
+	entryArr, err := ReadAndWatch(ctx, key)
 	if err != nil {
 		t.Fatalf("ReadAndUnmarshal error:%v", err)
 	}
-
 	t.Logf("entryArr:%v", entryArr[0])
+
+	time.Sleep(1 * time.Second)
+
+	val = `[{"path":"E:/GoModules/log-collector/log/tail_test.log","topic":"kafka-test-topic"}]`
+	if err := defaultEtcdContent.Wrapper.Put(context.Background(), key, val); err != nil {
+		t.Fatalf("put into etcd error:%v", err)
+	}
+
+	time.Sleep(3 * time.Second)
 }

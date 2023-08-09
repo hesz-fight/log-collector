@@ -21,7 +21,7 @@ var (
 	EtcdSettingCache  *EtcdSetting
 )
 
-func IntSetting(layer int) error {
+func InitSetting(layer int) error {
 	vp := viper.New()
 	vp.SetConfigName("config")
 	vp.AddConfigPath(getAbsPath(layer) + globalconst.PathSeparator + "conf")
