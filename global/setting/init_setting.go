@@ -2,6 +2,9 @@ package setting
 
 import (
 	"log-collector/global/errcode"
+	"log-collector/global/globalconst"
+	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -18,10 +21,10 @@ var (
 	EtcdSettingCache  *EtcdSetting
 )
 
-func IntSetting() error {
+func IntSetting(layer int) error {
 	vp := viper.New()
 	vp.SetConfigName("config")
-	vp.AddConfigPath("conf")
+	vp.AddConfigPath(getAbsPath(layer) + globalconst.PathSeparator + "conf")
 	vp.SetConfigType("yaml")
 
 	if err := vp.ReadInConfig(); err != nil {
@@ -39,4 +42,14 @@ func IntSetting() error {
 	}
 
 	return nil
+}
+
+func getAbsPath(layer int) string {
+	rootPath, _ := os.Getwd()
+	for i := 0; i < layer; i++ {
+		ind := strings.LastIndex(rootPath, globalconst.PathSeparator)
+		rootPath = rootPath[:ind]
+	}
+
+	return rootPath
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"log-collector/global/setting"
 	"reflect"
 	"time"
 
@@ -12,34 +13,47 @@ import (
 )
 
 const (
-	configKey = "config_entry"
+	maxSize = 1024
 )
 
-var configEntries []*ConfigEntry
+var defaultEtcdContent *EtcdContent
+
+type Observer interface {
+	Notify(conf []*ConfigEntry, bufSize int)
+}
 
 type ConfigEntry struct {
 	Path  string `json:"path"`
 	Topic string `json:"topic"`
 }
 
-func InitEtcd(endpointds []string, dialTimeout time.Duration) error {
-	c, err := NewEtcdWrapper(endpointds, dialTimeout)
-	if err != nil {
-		return err
+type EtcdContent struct {
+	Ctx       context.Context
+	Observers []Observer
+	Wrapper   *EtcdWrapper
+}
+
+func (e *EtcdContent) Register(observer Observer) error {
+	if e.Observers == nil {
+		e.Observers = make([]Observer, 0)
 	}
-	ctx := context.Background()
-	if err := ReadAndUnmarshal(ctx, c, configKey, &configEntries); err != nil {
-		return err
+	if len(e.Observers) > maxSize {
+		return errors.New("get register more observers")
 	}
 
-	go WatchAndUpdate(ctx, c, configKey, &configEntries)
-
+	e.Observers = append(e.Observers, observer)
 	return nil
 }
 
-// ReadAndUnmarshal read from etcd and unmarsh
-func ReadAndUnmarshal(ctx context.Context, c *EtcdWrapper, key string, val interface{}) error {
-	vals, err := c.Get(ctx, key)
+func (e *EtcdContent) NotifyAll(conf []*ConfigEntry, bufSize int) {
+	for _, o := range e.Observers {
+		o.Notify(conf, bufSize)
+	}
+}
+
+// readAndUnmarshal read from etcd and unmarsh
+func (e *EtcdContent) readAndUnmarshal(key string, val interface{}) error {
+	vals, err := e.Wrapper.Get(e.Ctx, key)
 	if err != nil {
 		return err
 	}
@@ -52,13 +66,9 @@ func ReadAndUnmarshal(ctx context.Context, c *EtcdWrapper, key string, val inter
 	return nil
 }
 
-// WatchAndUpdate watch and update the val
-func WatchAndUpdate(ctx context.Context, c *EtcdWrapper, key string, val interface{}) error {
-	// val must be pointer
-	if reflect.TypeOf(val).Kind() != reflect.Pointer {
-		return errors.New("val must be pointer")
-	}
-	rspCh := c.Watch(ctx, key)
+// watchAndUpdate watch and update the val
+func (e *EtcdContent) watchAndUpdate(key string) error {
+	rspCh := e.Wrapper.Watch(e.Ctx, key)
 	for rsp := range rspCh {
 		for _, event := range rsp.Events {
 			var v []byte
@@ -67,12 +77,48 @@ func WatchAndUpdate(ctx context.Context, c *EtcdWrapper, key string, val interfa
 			} else if event.Type == mvccpb.DELETE {
 				v = []byte{}
 			}
-			if err := json.Unmarshal(v, val); err != nil {
+			conf := make([]*ConfigEntry, 0)
+			if err := json.Unmarshal(v, &conf); err != nil {
 				return err
 			}
-			log.Printf("watching value change key:%v val:%v\n", key, reflect.ValueOf(val).Elem().Index(0).Elem().Interface())
+			// notify
+			e.NotifyAll(conf, setting.TailSettingCache.MaxBufSize)
+			log.Printf("watching value change key:%v val:%v\n", key, reflect.ValueOf(conf).Elem().Index(0).Elem().Interface())
 		}
 	}
 
 	return nil
+}
+
+// Register ...
+func Register(observer Observer) error {
+	return defaultEtcdContent.Register(observer)
+}
+
+// InitEtcd ...
+func InitEtcd(endpointds []string, dialTimeout time.Duration) error {
+	etcdWrapper, err := NewEtcdWrapper(endpointds, dialTimeout)
+	if err != nil {
+		return err
+	}
+
+	defaultEtcdContent = &EtcdContent{
+		Ctx:       context.Background(),
+		Observers: make([]Observer, 0),
+		Wrapper:   etcdWrapper,
+	}
+
+	return nil
+}
+
+// ReadAndWatch ...
+func ReadAndWatch(configKey string) ([]*ConfigEntry, error) {
+	conf := make([]*ConfigEntry, 0)
+	if err := defaultEtcdContent.readAndUnmarshal(configKey, &conf); err != nil {
+		return nil, err
+	}
+
+	go defaultEtcdContent.watchAndUpdate(configKey)
+
+	return conf, nil
 }

@@ -2,38 +2,35 @@ package etcd
 
 import (
 	"context"
+	"log-collector/global/setting"
 	"testing"
 	"time"
 )
 
 func TestConfigEntry(t *testing.T) {
-	endpoints := []string{"127.0.0.1:2379"}
-	dailTimeout := 3 * time.Second
-	cli, err := NewEtcdWrapper(endpoints, dailTimeout)
-	if err != nil {
-		t.Fatalf("NewEtcdWrapper error:%v", err)
+	if err := setting.IntSetting(2); err != nil {
+		panic(err)
+	}
+	// init
+	if err := InitEtcd(setting.EtcdSettingCache.Endpoints,
+		time.Duration(setting.EtcdSettingCache.DialTimeout)*time.Second); err != nil {
+		panic(err)
 	}
 
+	key := setting.EtcdSettingCache.LogConfigKey
 	val := `[{"path":"E:/GoModules/log-collector/log/tail.log","topic":"kafka-test-topic"}]`
-	if err := cli.Put(context.Background(), "config_test", val); err != nil {
+	if err := defaultEtcdContent.Wrapper.Put(context.Background(), key, val); err != nil {
 		t.Fatalf("put into etcd error:%v", err)
 	}
 
-	entryArr := []*ConfigEntry{}
-	if err := ReadAndUnmarshal(context.Background(), cli, "config_test", &entryArr); err != nil {
+	defer func() {
+		defaultEtcdContent.Wrapper.DeleteOne(context.Background(), key)
+	}()
+
+	entryArr, err := ReadAndWatch(key)
+	if err != nil {
 		t.Fatalf("ReadAndUnmarshal error:%v", err)
 	}
 
 	t.Logf("entryArr:%v", entryArr[0])
-
-	go WatchAndUpdate(context.Background(), cli, "config_test", &entryArr)
-
-	val = `[{"path":"D:/GoModules/log-collector/log/tail.log","topic":"kafka-test-topic"}]`
-	if err := cli.Put(context.Background(), "config_test", val); err != nil {
-		t.Fatalf("put into etcd error:%v", err)
-	}
-
-	time.Sleep(1 * time.Second)
-
-	t.Logf("entryArr: %v", entryArr[0])
 }

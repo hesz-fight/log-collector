@@ -57,3 +57,23 @@ func (e *EtcdWrapper) Get(ctx context.Context, key string) ([]string, error) {
 
 	return rsp, nil
 }
+
+// DeleteOne delete one key
+func (e *EtcdWrapper) DeleteOne(ctx context.Context, key string) error {
+	_, err := e.etcdCli.Delete(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteRange delete keys in range [key, end)
+func (e *EtcdWrapper) DeleteRange(ctx context.Context, key string, end string) (int64, error) {
+	rsp, err := e.etcdCli.Delete(ctx, key, clientv3.WithRange(end))
+	if err != nil {
+		return 0, nil
+	}
+
+	return rsp.Deleted, nil
+}

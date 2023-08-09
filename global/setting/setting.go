@@ -10,6 +10,7 @@ type TailSetting struct {
 }
 
 type EtcdSetting struct {
-	Endpoints   []string
-	DialTimeout int64
+	Endpoints    []string
+	DialTimeout  int64
+	LogConfigKey string
 }
