@@ -129,7 +129,7 @@ func (t *TailReaderManager) startReadLog(ctx context.Context) {
 					log.Println(string(debug.Stack()))
 				}
 			}()
-			r.Srart()
+			r.Start()
 			for {
 				text, ok := r.SyncRead()
 				if !ok {
@@ -151,7 +151,7 @@ func (t *TailReaderManager) startReadLog(ctx context.Context) {
 	}
 }
 
-func (t *TailReader) Srart() {
+func (t *TailReader) Start() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {

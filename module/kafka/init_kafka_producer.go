@@ -52,7 +52,13 @@ func NewSyncProducer(addrs []string, config *sarama.Config) (*KafkaSyncProducer,
 		config.Producer.Partitioner = sarama.NewRandomPartitioner
 		config.Producer.Return.Successes = true
 	}
-	producer, err := sarama.NewSyncProducer(addrs, config)
+
+	cli, err := sarama.NewClient(addrs, config)
+	if err != nil {
+		return nil, err
+	}
+
+	producer, err := sarama.NewSyncProducerFromClient(cli)
 	if err != nil {
 		return nil, err
 	}
