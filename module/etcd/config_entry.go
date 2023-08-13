@@ -55,12 +55,13 @@ func (e *EtcdContent) register(key string, observer Observer) error {
 
 // notifyAll ...
 func (e *EtcdContent) notifyAll(ctx context.Context, key string, conf []*ConfigEntry) {
+	log.Println("etcd context notify all obervers for key:" + key)
 	observers, ok := e.Observers[key]
 	if !ok {
 		return
 	}
 	for _, o := range observers {
-		o.Notify(ctx, conf)
+		go o.Notify(ctx, conf)
 	}
 }
 
@@ -101,8 +102,8 @@ func (e *EtcdContent) watchAndUpdate(ctx context.Context, key string) error {
 				return err
 			}
 			// notify
-			e.notifyAll(ctx, key, conf)
 			log.Printf("watching value change key:%v val:%v\n", key, reflect.ValueOf(conf).Index(0).Elem().Interface())
+			e.notifyAll(ctx, key, conf)
 		}
 	}
 

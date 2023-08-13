@@ -2,7 +2,6 @@ package logtail
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"runtime/debug"
@@ -41,48 +40,22 @@ type TailReader struct {
 	topics []string
 }
 
-// InitAndStart ...
-func InitAndStart(ctx context.Context, configEntries []*etcd.ConfigEntry) (*TailReaderManager, error) {
-	readers := make([]*TailReader, 0, len(configEntries))
-	for _, entry := range configEntries {
-		tail, err := tail.TailFile(entry.Path, tail.Config{
-			ReOpen:    true,
-			Follow:    true,
-			Location:  &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END},
-			MustExist: false,
-			Poll:      true,
-		})
-		if err != nil {
-			return nil, errcode.InitLogTailReaderError.ToError()
-		}
-		readers = append(readers, &TailReader{
-			tail:   tail,
-			buf:    make(chan string, setting.TailSettingCache.MaxBufSize),
-			done:   make(chan common.Empty),
-			path:   entry.Path,
-			topics: strings.Split(entry.Topic, ","),
-		})
-	}
-
-	mgr := &TailReaderManager{
-		TailWorker: readers,
-		Mtx:        sync.RWMutex{},
-	}
-
-	mgr.startReadLog(ctx)
-
-	return mgr, nil
-}
-
 func (t *TailReaderManager) Notify(ctx context.Context, conf common.Any) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("start panic")
+		}
+	}()
+
 	t.Mtx.Lock()
-	defer t.Mtx.RUnlock()
+	defer t.Mtx.Unlock()
+
 	confEntryArr, ok := conf.([]*etcd.ConfigEntry)
 	if !ok {
 		return
 	}
-	// update and done
-	newReaders := make([]*TailReader, 0, len(confEntryArr))
+	// update and close done channel
+	newWorkers := make([]*TailReader, 0, len(confEntryArr))
 	for _, entry := range confEntryArr {
 		tail, err := tail.TailFile(entry.Path,
 			tail.Config{
@@ -96,7 +69,7 @@ func (t *TailReaderManager) Notify(ctx context.Context, conf common.Any) {
 			log.Println(errcode.InitLogTailReaderError.ToError())
 			return
 		}
-		newReaders = append(newReaders, &TailReader{
+		newWorkers = append(newWorkers, &TailReader{
 			tail:   tail,
 			buf:    make(chan string, setting.TailSettingCache.MaxBufSize),
 			done:   make(chan common.Empty),
@@ -105,21 +78,16 @@ func (t *TailReaderManager) Notify(ctx context.Context, conf common.Any) {
 		})
 	}
 
-	oldReaders := t.TailWorker
-	t.TailWorker = newReaders
+	oldWorkers := t.TailWorker
+	t.TailWorker = newWorkers
 
-	t.startReadLog(ctx)
-	for _, r := range oldReaders {
+	t.startWorker(ctx)
+	for _, r := range oldWorkers {
 		close(r.Done())
 	}
 }
 
-func (t *TailReaderManager) startReadLog(ctx context.Context) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("start panic")
-		}
-	}()
+func (t *TailReaderManager) startWorker(ctx context.Context) {
 	log.Println("start log agent")
 	// parallel read
 	for _, reader := range t.TailWorker {
@@ -137,14 +105,22 @@ func (t *TailReaderManager) startReadLog(ctx context.Context) {
 				}
 				// send log text to kafka
 				for _, topic := range r.topics {
-					for i := 0; i < retryTime; i++ {
-						partition, offset, err := kafka.Producer.SendMessag(topic, text)
-						if err != nil {
-							continue
+					go func(topic string) {
+						defer func() {
+							if err := recover(); err != nil {
+								log.Println(string(debug.Stack()))
+							}
+						}()
+						for i := 0; i < retryTime; i++ {
+							partition, offset, err := kafka.Producer.SendMessag(topic, text)
+							if err != nil {
+								log.Printf("send kafka fail. err:%v\n", err)
+								continue
+							}
+							log.Printf("send kafka successfully. partition:%v offset:%v\n", partition, offset)
+							break
 						}
-						fmt.Printf("send kafka successfully. partition:%v offset:%v\n", partition, offset)
-						break
-					}
+					}(topic)
 				}
 			}
 		}(reader)
@@ -211,4 +187,37 @@ func (t *TailReader) SyncRead() (string, bool) {
 	}
 
 	return r, true
+}
+
+// InitAndStart ...
+func InitAndStart(ctx context.Context, configEntries []*etcd.ConfigEntry) (*TailReaderManager, error) {
+	readers := make([]*TailReader, 0, len(configEntries))
+	for _, entry := range configEntries {
+		tail, err := tail.TailFile(entry.Path, tail.Config{
+			ReOpen:    true,
+			Follow:    true,
+			Location:  &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END},
+			MustExist: false,
+			Poll:      true,
+		})
+		if err != nil {
+			return nil, errcode.InitLogTailReaderError.ToError()
+		}
+		readers = append(readers, &TailReader{
+			tail:   tail,
+			buf:    make(chan string, setting.TailSettingCache.MaxBufSize),
+			done:   make(chan common.Empty),
+			path:   entry.Path,
+			topics: strings.Split(entry.Topic, ","),
+		})
+	}
+
+	mgr := &TailReaderManager{
+		TailWorker: readers,
+		Mtx:        sync.RWMutex{},
+	}
+
+	mgr.startWorker(ctx)
+
+	return mgr, nil
 }

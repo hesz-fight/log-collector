@@ -10,4 +10,4 @@ Etcd:
   Endpoints:
     - 127.0.0.1:2379
   DialTimeout: 10
-  LogConfigKey: /log/configKey
+  LogConfigKey: /log/%s/configKey
